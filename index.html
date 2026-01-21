@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D FPS Game</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="blocker">
+        <div id="instructions">
+            <h1>3D FPS Game</h1>
+            <p>Click to play</p>
+            <p class="controls">
+                WASD - Move<br>
+                MOUSE - Look<br>
+                SPACE - Jump<br>
+                LEFT CLICK - Shoot<br>
+                ESC - Pause
+            </p>
+        </div>
+    </div>
+
+    <div id="crosshair">+</div>
+    <div id="hud">
+        <div id="health">Health: 100</div>
+        <div id="ammo">Ammo: 30</div>
+        <div id="kills">Kills: 0</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
