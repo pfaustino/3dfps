@@ -10,10 +10,10 @@ export class EnemyManager {
         this.enemies = [];
         this.killCount = 0;
 
-        // Spawn settings
-        this.maxEnemies = 5;
-        this.spawnRadius = 25;
-        this.minSpawnDistance = 10; // Minimum distance from player to spawn
+        // Spawn settings - larger map = more enemies
+        this.maxEnemies = 12;
+        this.spawnRadius = 60;
+        this.minSpawnDistance = 15; // Minimum distance from player to spawn
 
         // DOM
         this.killsDisplay = document.getElementById('kills');
