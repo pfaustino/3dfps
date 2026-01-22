@@ -22,6 +22,8 @@ export class Player {
 
         // Player stats
         this.health = 100;
+        this.armor = 0;
+        this.money = 0;
         this.ammo = 30;
         this.maxAmmo = 30;
 
@@ -324,6 +326,11 @@ export class Player {
                     }
                 }
                 break;
+            case 'Delete':
+                if (this.editMode && this.selectedObject) {
+                    this.deleteSelectedObject();
+                }
+                break;
         }
 
         // Editor Controls (Rotation/Scaling only, Movement is Mouse-based)
@@ -391,7 +398,7 @@ export class Player {
 
         if (event.button === 2) { // Right click - Select Object in Editor
             if (this.editMode) {
-                this.selectObject();
+                this.selectObject(event.ctrlKey);
             }
         }
     }
@@ -959,8 +966,20 @@ export class Player {
     }
 
     updateHUD() {
-        this.healthDisplay.textContent = `Health: ${this.health}`;
+        this.healthDisplay.textContent = `Health: ${Math.ceil(this.health)}`;
         this.ammoDisplay.textContent = `Ammo: ${this.ammo}`;
+
+        // Create/Update Armor and Money displays if they exist, or append them
+        // For simplicity, we assume they are added to the existing elements or we update textContent dynamically
+        // Let's modify index.html to add IDs for them, or just append here.
+
+        // Actually, let's look at index.html first to add the elements properly.
+        // But for now, let's just make sure we update them if they exist.
+        const armorDisp = document.getElementById('armor-display');
+        if (armorDisp) armorDisp.textContent = `Armor: ${(this.armor || 0).toFixed(1)}`;
+
+        const moneyDisp = document.getElementById('money-display');
+        if (moneyDisp) moneyDisp.textContent = `$: ${(this.money || 0)}`;
     }
 
     // Level Editor Methods
@@ -1013,12 +1032,26 @@ export class Player {
         console.log('Editor Mode:', this.editMode ? 'ON' : 'OFF');
     }
 
-    selectObject() {
-        // TOGGLE LOGIC: If something is already selected, Deselect it (Drop it)
+    selectObject(isCtrlPressed = false) {
+        // TOGGLE LOGIC: If something is already selected
         if (this.selectedObject) {
-            this.selectedObject = null;
-            this.updateEditorHUD();
-            return;
+            if (isCtrlPressed) {
+                // CLONE ON DROP (Stamp)
+                // Leave a copy here, keep holding original
+                this.cloneObject(this.selectedObject);
+                // Visual feedback?
+                console.log('Stamped Object');
+                return;
+            } else {
+                // DROP
+                this.selectedObject = null;
+                this.updateEditorHUD();
+
+                // UNFREEZE CAMERA when dropping object
+                if (this.controls) this.controls.lock();
+
+                return;
+            }
         }
 
         // reuse raycasting logic from update method
@@ -1042,20 +1075,28 @@ export class Player {
 
             // ONLY select if it's a valid loaded model (has modelName)
             if (target.userData && target.userData.modelName) {
-                this.selectedObject = target;
 
-                // Visual feedback
-                console.log('Selected:', target.name || 'Unnamed Object');
+                if (isCtrlPressed) {
+                    // CLONE ON PICKUP
+                    const clone = this.cloneObject(target);
+                    this.selectedObject = clone;
+                    console.log('Cloned & Picked Up:', clone.name);
+                } else {
+                    // NORMAL PICKUP
+                    this.selectedObject = target;
+                    console.log('Selected:', target.name || 'Unnamed Object');
+                }
+
                 this.updateEditorHUD();
 
                 // Snap Object to Camera View Center
-                this.snapObjectToView(target);
+                this.snapObjectToView(this.selectedObject);
 
                 // Initialize Drag Distance (XZ)
                 const worldCamPos = new THREE.Vector3();
                 this.game.camera.getWorldPosition(worldCamPos);
-                const dx = target.position.x - worldCamPos.x;
-                const dz = target.position.z - worldCamPos.z;
+                const dx = this.selectedObject.position.x - worldCamPos.x;
+                const dz = this.selectedObject.position.z - worldCamPos.z;
                 this.dragDistance = Math.sqrt(dx * dx + dz * dz);
 
                 return;
@@ -1068,6 +1109,57 @@ export class Player {
 
         // UNFREEZE CAMERA when dropping object
         if (this.controls) this.controls.lock();
+    }
+
+    cloneObject(original) {
+        const clone = original.clone();
+
+        // Copy User Data explicitly if needed (clone usually does shallow copy)
+        clone.userData = JSON.parse(JSON.stringify(original.userData));
+
+        // Add to Scene
+        this.game.scene.add(clone);
+
+        // Register Colliders
+        // clone() copies children, so it has the collision mesh, but we need to add it to game.world.collidables
+        clone.traverse((child) => {
+            if (child.name === 'obstacle_child' || child.userData.modelName) {
+                // Check if it's a collider
+                if (child.name === 'obstacle_child') {
+                    this.game.world.collidables.push(child);
+                }
+
+                // Ensure shadows are enabled on cloned meshes
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            }
+        });
+
+        return clone;
+    }
+
+    deleteSelectedObject() {
+        if (!this.selectedObject) return;
+
+        const obj = this.selectedObject;
+        console.log('Deleting:', obj.name);
+
+        // 1. Remove from Scene
+        this.game.scene.remove(obj);
+
+        // 2. Cleanup Collidables
+        // We need to remove the object and any of its children from the global collidables list
+        const idsToRemove = new Set();
+        idsToRemove.add(obj.id);
+        obj.traverse(child => idsToRemove.add(child.id));
+
+        this.game.world.collidables = this.game.world.collidables.filter(item => !idsToRemove.has(item.id));
+
+        // 3. Reset Selection
+        this.selectedObject = null;
+        this.updateEditorHUD();
     }
 
     snapObjectToView(object) {
@@ -1139,5 +1231,27 @@ export class Player {
         this.ammo = this.maxAmmo;
         this.updateHUD();
         if (this.game.audioManager) this.game.audioManager.playReload();
+    }
+
+    collectLoot(type) {
+        if (type === 'coin') {
+            this.money += 10;
+            console.log(`Collected Coin! Money: ${this.money}`);
+            // Play sound
+            if (this.game.audioManager) this.game.audioManager.playTone(1200, 0.1, 0.4, 'sine');
+        } else if (type === 'cowboyhat') {
+            // Armor Formula: Gain = 100 / (100 + CurrentArmor)
+            const armorGain = 100 / (100 + this.armor);
+            this.armor += armorGain;
+            console.log(`Collected Hat! Armor: ${this.armor.toFixed(2)} (+${armorGain.toFixed(2)})`);
+            // Play sound
+            if (this.game.audioManager) this.game.audioManager.playTone(400, 0.1, 0.4, 'square');
+        } else if (type === 'potion') {
+            this.health = Math.min(100, this.health + 25);
+            console.log(`Collected Potion! Health: ${this.health}`);
+            // Play sound
+            if (this.game.audioManager) this.game.audioManager.playTone(600, 0.3, 0.5, 'sine'); // Higher pitch magical sound
+        }
+        this.updateHUD();
     }
 }

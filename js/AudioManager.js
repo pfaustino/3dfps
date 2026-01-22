@@ -31,6 +31,9 @@ export class AudioManager {
             this.masterGain.gain.value = this.masterVolume;
             this.masterGain.connect(this.context.destination);
 
+            this.buffers = {};
+            this.loadMonsterSounds();
+
             this.initialized = true;
             console.log('Audio system initialized');
 
@@ -39,6 +42,24 @@ export class AudioManager {
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
         }
+    }
+
+    loadMonsterSounds() {
+        this.loadSound('robot', 'assets/sounds/creepy-sound-creepy-robot-380620.mp3');
+        this.loadSound('ghost', 'assets/sounds/halloween-ghost-whisper-410557.mp3');
+        this.loadSound('zombie', 'assets/sounds/zombie-sound-357975.mp3');
+        this.loadSound('demon', 'assets/sounds/horror-demonic-sound-1-vol-001-140997.mp3');
+    }
+
+    loadSound(key, url) {
+        fetch(url)
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => this.context.decodeAudioData(arrayBuffer))
+            .then(audioBuffer => {
+                this.buffers[key] = audioBuffer;
+                console.log(`Loaded sound: ${key}`);
+            })
+            .catch(e => console.error(`Error loading sound ${key}:`, e));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -211,12 +232,27 @@ export class AudioManager {
     /**
      * Enemy attack/growl sound
      */
-    playEnemyAttack() {
+    playEnemyAttack(type) {
         if (!this.initialized) return;
+
+        // Try to play loaded sound
+        if (type && this.buffers[type]) {
+            const source = this.context.createBufferSource();
+            source.buffer = this.buffers[type];
+
+            const gain = this.context.createGain();
+            gain.gain.value = 0.6 * this.sfxVolume;
+
+            source.connect(gain);
+            gain.connect(this.masterGain);
+
+            source.start();
+            return gain;
+        }
 
         const now = this.context.currentTime;
 
-        // Aggressive growl
+        // Aggressive growl (Fallback)
         const osc = this.context.createOscillator();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(120, now);
@@ -239,6 +275,8 @@ export class AudioManager {
 
         osc.start(now);
         osc.stop(now + 0.25);
+
+        return gain;
     }
 
     /**

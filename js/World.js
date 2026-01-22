@@ -10,6 +10,7 @@ export class World {
         this.collidables = [];
         this.loader = new GLTFLoader();
         this.loadedModels = {};
+        this.assetCache = {}; // Cache for cloning
     }
 
     init() {
@@ -84,18 +85,32 @@ export class World {
 
                 // Fallback / Default if file missing (optional, or just log error)
             });
+
+        // Preload Loot Models (Hidden off-stage)
+        // Preload Loot Models (Hidden off-stage)
+        const lootModels = ['CoinDollarSign.glb', 'SheriffHat.glb', 'ComplexHealthPotion.glb'];
+        lootModels.forEach(modelName => {
+            this.loadModel({ model: modelName, path: 'assets', x: 0, y: -500, z: 0, scale: 1, rotY: 0, collidable: false });
+        });
     }
 
     loadModel(config, isCollidable = false, isMoveable = false) {
-        // Use config.collidable if present, otherwise default to argument
         const shouldCollide = config.collidable !== undefined ? config.collidable : isCollidable;
 
-        const path = `assets/CityPack/${config.model}`;
+        let path = `assets/CityPack/${config.model}`;
+        if (config.path) {
+            path = `${config.path}/${config.model}`;
+        }
 
         this.loader.load(
             path,
             (gltf) => {
                 const model = gltf.scene;
+
+                // Cache for LootManager
+                if (this.assetCache && !this.assetCache[config.model]) {
+                    this.assetCache[config.model] = model.clone();
+                }
 
                 // Store model name for tooltip display
                 model.name = config.model;
@@ -201,5 +216,18 @@ export class World {
                 }
             }
         });
+    }
+
+    getAsset(name) {
+        // Simple search in loaded assets (this assumes we keep a cache or can clone from scene)
+        // Since we don't have a dedicated asset cache in World yet, we rely on the implementation pattern.
+        // Let's look if we loaded them as props with modelName.
+
+        // Actually, we need to ensure these are loaded even if not in world.json.
+        // We will add a "preload" step or just check our props lookup.
+
+        // For now, let's search the template cache if we add one, or just search known props.
+        // But better: Store loaded GLTFs in a dictionary in loadModel.
+        return this.assetCache ? this.assetCache[name] : null;
     }
 }

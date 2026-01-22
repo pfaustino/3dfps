@@ -62,13 +62,33 @@ export class EnemyManager {
     }
 
     isValidSpawnPosition(position) {
-        // Simple check - ensure not too close to existing enemies
+        // 1. Check distance to other enemies
         for (const enemy of this.enemies) {
             if (enemy.state !== Enemy.STATE.DEAD) {
                 const dist = enemy.mesh.position.distanceTo(position);
                 if (dist < 3) return false;
             }
         }
+
+        // 2. Check collision with world obstacles
+        // Use a slightly larger radius for spawn safety
+        const spawnRadius = 1.0;
+        const obstacles = this.game.world.collidables;
+
+        for (const obstacle of obstacles) {
+            // Skip ground
+            if (obstacle.name === 'ground') continue;
+
+            const box = new THREE.Box3().setFromObject(obstacle);
+
+            // Simple AABB vs point/radius check
+            // Expand box by radius to check if point is inside extended box
+            if (position.x >= box.min.x - spawnRadius && position.x <= box.max.x + spawnRadius &&
+                position.z >= box.min.z - spawnRadius && position.z <= box.max.z + spawnRadius) {
+                return false; // Inside an obstacle
+            }
+        }
+
         return true;
     }
 

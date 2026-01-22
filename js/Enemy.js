@@ -549,6 +549,13 @@ export class Enemy {
         // Check for player detection (except when dead or already attacking)
         if (this.state !== Enemy.STATE.DEAD && this.state !== Enemy.STATE.ATTACK) {
             if (this.canSeePlayer()) {
+                // Aggro Trigger: If we were previously passive, play sound
+                if (this.state === Enemy.STATE.IDLE || this.state === Enemy.STATE.PATROL) {
+                    if (this.game.audioManager) {
+                        this.activeAttackSoundGain = this.game.audioManager.playEnemyAttack(this.type);
+                    }
+                }
+
                 if (this.distanceToPlayer() <= this.attackRange) {
                     this.state = Enemy.STATE.ATTACK;
                 } else {
@@ -686,8 +693,8 @@ export class Enemy {
         // Deal damage to player
         this.game.player.takeDamage(this.damage);
 
-        // Play attack sound
-        if (this.game.audioManager) this.game.audioManager.playEnemyAttack();
+        // Play attack sound (Optional: Add a physical 'whoosh' or hit sound here instead of the vocal growl)
+        // Refactored: Vocal sound now plays on Aggro start.
 
         console.log(`Enemy attacks! Player takes ${this.damage} damage.`);
 
@@ -757,6 +764,22 @@ export class Enemy {
         // Play death sound
         if (this.game.audioManager) this.game.audioManager.playEnemyDeath();
 
+        // Fade out any active attack sound
+        if (this.activeAttackSoundGain && this.game.audioManager && this.game.audioManager.context) {
+            try {
+                const ctx = this.game.audioManager.context;
+                const gain = this.activeAttackSoundGain.gain;
+
+                // Cancel scheduled ramp
+                gain.cancelScheduledValues(ctx.currentTime);
+                // Ramp to 0
+                gain.setValueAtTime(gain.value, ctx.currentTime);
+                gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            } catch (e) {
+                // Ignore audio errors during cleanup
+            }
+        }
+
         console.log('Enemy died!');
 
         // Death animation - shrink and fade
@@ -782,6 +805,18 @@ export class Enemy {
         // Notify manager
         if (this.game.enemyManager) {
             this.game.enemyManager.onEnemyKilled(this);
+        }
+
+        // Spawn Loot
+        if (this.game.lootManager) {
+            const rand = Math.random();
+            if (rand < 0.1) { // 10% Chance for Potion
+                this.game.lootManager.spawnLoot(this.mesh.position, 'potion');
+            } else if (rand < 0.1) { // 10% Chance for Hat (0.1 to 0.2)
+                this.game.lootManager.spawnLoot(this.mesh.position, 'cowboyhat');
+            } else if (rand < 0.8) { // 60% Chance for Coin
+                this.game.lootManager.spawnLoot(this.mesh.position, 'coin');
+            }
         }
     }
 

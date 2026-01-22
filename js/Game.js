@@ -4,6 +4,7 @@ import { World } from './World.js';
 import { InputManager } from './InputManager.js';
 import { EnemyManager } from './EnemyManager.js';
 import { AudioManager } from './AudioManager.js';
+import { LootManager } from './LootManager.js';
 
 /**
  * Main Game class - orchestrates all game systems
@@ -41,12 +42,14 @@ export class Game {
         this.player = new Player(this);
         this.enemyManager = new EnemyManager(this);
         this.audioManager = new AudioManager(this);
+        this.lootManager = new LootManager(this);
 
         this.world.init();
         this.player.init();
         this.inputManager.init();
         this.enemyManager.init();
         this.audioManager.init();
+        this.lootManager.init();
 
         // Handle window resize
         window.addEventListener('resize', () => this.onWindowResize());
@@ -129,6 +132,7 @@ export class Game {
             this.player.update(delta);
             this.world.update(delta);
             this.enemyManager.update(delta);
+            this.lootManager.update(delta);
         }
 
         this.renderer.render(this.scene, this.camera);
