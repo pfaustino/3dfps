@@ -50,6 +50,12 @@ export class Player {
         this.editorRotateStep = Math.PI / 4; // 45 degrees
         this.lastActionTime = 0;
 
+        // Vehicle System
+        this.isDriving = false;
+        this.currentVehicle = null;
+        this.vehicleSpeed = 0;
+        this.vehicleSteering = 0;
+
         // Weapon system
         this.weapons = [
             {
@@ -258,6 +264,13 @@ export class Player {
             case 'KeyG':
                 this.ghostMode = !this.ghostMode;
                 console.log('Ghost mode:', this.ghostMode ? 'ON (no collision)' : 'OFF');
+                break;
+            case 'KeyE': // Enter/Exit Vehicle
+                if (this.isDriving) {
+                    this.exitVehicle();
+                } else {
+                    this.tryEnterVehicle();
+                }
                 break;
             case 'KeyK': // Toggle Editor Mode
                 this.toggleEditorMode();
@@ -488,6 +501,15 @@ export class Player {
     }
 
     update(delta) {
+        if (!this.controls.isLocked) return;
+
+        // VEHICLE LOGIC
+        if (this.isDriving && this.currentVehicle) {
+            this.updateVehiclePhysics(delta);
+            return;
+        }
+
+        // Standard Player Logic
         // Update shoot cooldown
         if (this.shootCooldown > 0) {
             this.shootCooldown -= delta;
@@ -604,8 +626,273 @@ export class Player {
         }
     }
 
+    tryEnterVehicle() {
+        if (this.editMode) return;
+
+        // Simple distance check to all vehicles
+        // (Could optimize with spatial hash or specific list, but iteration is fine for now)
+        const playerPos = this.controls.object.position;
+        let closestVehicle = null;
+        let closestDist = 3.0; // Max enter distance
+
+        // Find all interactable vehicles
+        this.game.world.collidables.forEach(obj => {
+            // Check if it's a vehicle (obstacle_child usually parented to model)
+            // We need the model root.
+            let model = obj;
+            while (model.parent && model.parent.type !== 'Scene') {
+                model = model.parent;
+            }
+
+            // Check name
+            const name = model.userData.modelName || model.name || '';
+            const isVehicle = ['Car', 'Bus', 'Truck', 'Van', 'SUV', 'Police'].some(s => name.includes(s));
+
+            if (isVehicle) {
+                // Get distance to model center
+                const dist = playerPos.distanceTo(model.position);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestVehicle = model;
+                }
+            }
+        });
+
+        if (closestVehicle) {
+            console.log('Entering vehicle:', closestVehicle.name);
+            this.enterVehicle(closestVehicle);
+        } else {
+            console.log('No vehicle nearby');
+        }
+    }
+
+    enterVehicle(vehicle) {
+        this.isDriving = true;
+        this.currentVehicle = vehicle;
+        this.vehicleSpeed = 0;
+        this.vehicleSteering = 0;
+
+        // 1. Hide Player Weapon
+        if (this.weapons[this.currentWeapon].model) {
+            this.weapons[this.currentWeapon].model.visible = false;
+        }
+
+        // 2. Switch Camera to Third Person Follow
+        // Detach camera from controls object temporarily?
+        // Or just move the controls object to follow the car?
+        // It's cleaner to detach camera from controls for smooth physics, 
+        // BUT PointerLockControls binds camera rotation to mouse.
+        // Let's Keep controls active for "Looking around" but move the controls object to the car.
+
+        // Actually simpler: Just set velocity to 0 and handle position in update
+        this.velocity.set(0, 0, 0);
+
+        // Show HUD Message
+        const targetDisplay = document.getElementById('target');
+        if (targetDisplay) targetDisplay.textContent = 'Driving: ' + (vehicle.userData.modelName || 'Car');
+    }
+
+    exitVehicle() {
+        if (!this.currentVehicle) return;
+
+        // Teleport player slightly to the left of the car
+        const carPos = this.currentVehicle.position;
+        // Offset left (local -X)
+        const offset = new THREE.Vector3(-2.5, 0, 0);
+        offset.applyEuler(this.currentVehicle.rotation);
+
+        this.controls.object.position.copy(carPos).add(offset);
+        this.controls.object.position.y = this.playerHeight + 0.5; // Ensure above ground
+
+        // Reset state
+        this.isDriving = false;
+        this.currentVehicle = null;
+        this.vehicleSpeed = 0;
+
+        // Show Weapon
+        if (this.weapons[this.currentWeapon].model) {
+            this.weapons[this.currentWeapon].model.visible = true;
+        }
+
+        // Ensure velocity is reset
+        this.velocity.set(0, 0, 0);
+    }
+
+    updateVehiclePhysics(delta) {
+        const vehicle = this.currentVehicle;
+        const maxSpeed = 25.0;
+        const acceleration = 15.0;
+        const friction = 10.0;
+        const turnSpeed = 2.0;
+
+        // Input
+        // Forward/Back
+        if (this.moveForward) {
+            this.vehicleSpeed += acceleration * delta;
+        } else if (this.moveBackward) {
+            this.vehicleSpeed -= acceleration * delta;
+        } else {
+            // Friction
+            if (this.vehicleSpeed > 0) this.vehicleSpeed = Math.max(0, this.vehicleSpeed - friction * delta);
+            if (this.vehicleSpeed < 0) this.vehicleSpeed = Math.min(0, this.vehicleSpeed + friction * delta);
+        }
+
+        // Cap speed
+        this.vehicleSpeed = Math.max(-maxSpeed / 2, Math.min(maxSpeed, this.vehicleSpeed));
+
+        // Steering (only when moving)
+        if (Math.abs(this.vehicleSpeed) > 0.1) {
+            const dir = this.vehicleSpeed > 0 ? 1 : -1;
+            if (this.moveLeft) {
+                vehicle.rotation.y += turnSpeed * delta * dir;
+            }
+            if (this.moveRight) {
+                vehicle.rotation.y -= turnSpeed * delta * dir;
+            }
+        }
+
+        // Apply movement
+        vehicle.translateZ(this.vehicleSpeed * delta);
+
+        // Environment Collision
+        if (Math.abs(this.vehicleSpeed) > 0.1) {
+            const vehicleBox = new THREE.Box3().setFromObject(vehicle);
+            const obstacles = this.game.world.collidables.filter(obj => {
+                if (obj.name === 'ground' || obj.name.startsWith('road') || obj.name.startsWith('orb')) return false;
+
+                // Avoid self
+                let root = obj;
+                while (root.parent && root.parent.type !== 'Scene') {
+                    root = root.parent;
+                }
+                if (root === vehicle) return false;
+
+                return true;
+            });
+
+            for (const obstacle of obstacles) {
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+                if (vehicleBox.intersectsBox(obstacleBox)) {
+                    // Find root object
+                    let root = obstacle;
+                    while (root.parent && root.parent.type !== 'Scene') root = root.parent;
+
+                    if (root.userData.isMoveable) {
+                        // Push Moveable Object
+                        const pushDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicle.quaternion).normalize();
+                        const pushForce = this.vehicleSpeed * delta;
+
+                        root.position.add(pushDir.multiplyScalar(pushForce));
+
+                        // Transfer momentum (slow car down)
+                        this.vehicleSpeed *= 0.98;
+                    } else {
+                        // Hit Static Wall -> Stop
+                        console.log("Crashed into:", root.name);
+
+                        // Undo movement
+                        vehicle.translateZ(-this.vehicleSpeed * delta);
+
+                        // Stop (bounce slightly?)
+                        this.vehicleSpeed = -this.vehicleSpeed * 0.3; // Small bounce back
+                        if (Math.abs(this.vehicleSpeed) < 1) this.vehicleSpeed = 0;
+                    }
+                }
+            }
+        }
+
+        // Ground following (Raycast down from center)
+        const vPos = vehicle.position;
+        this.collisionRaycaster.set(new THREE.Vector3(vPos.x, vPos.y + 2, vPos.z), new THREE.Vector3(0, -1, 0));
+        const obstacles = this.game.world.collidables.filter(obj => obj.name === 'ground' || obj.name.startsWith('road')); // Restrict to driveable surfaces? Or just everything excluding self?
+        // Actually, just colliding with 'ground' and 'road' is safest for now to avoid climbing buildings.
+        // But World.js collidables includes buildings.
+        // Let's filter for just ground for smooth driving, or all?
+        // Let's use all but exclude self.
+
+        const validGround = this.game.world.collidables.filter(c => {
+            // Avoid self-collision (vehicle children have colliders)
+            let p = c;
+            while (p.parent && p.parent.type !== 'Scene') {
+                if (p === vehicle) return false;
+                p = p.parent;
+            }
+            return true;
+        });
+
+        const hits = this.collisionRaycaster.intersectObjects(validGround, true);
+        if (hits.length > 0) {
+            // Find highest point
+            let groundY = -999;
+            for (let h of hits) {
+                if (h.distance < 10) { // check reasonable range
+                    groundY = Math.max(groundY, h.point.y);
+                }
+            }
+            if (groundY > -999) {
+                // Smooth lerp for suspension effect? Or snap?
+                // Snap for now
+                vehicle.position.y = groundY;
+            }
+        }
+
+        // Camera Follow Logic (Third Person)
+        // Offset: Behind and Up relative to car
+        const offset = new THREE.Vector3(0, 3, -6); // Behind (-Z is forward in basic Three.js, but our car moves +Z? wait translateZ moves along local Z)
+        // Let's check rotation. By default GLTF models might face +Z or -Z. 
+        // We might need to debug this. Assuming +Z is forward for translateZ.
+
+        const relativeOffset = offset.clone().applyEuler(vehicle.rotation);
+        const cameraPos = vehicle.position.clone().add(relativeOffset);
+
+        // Smooth camera lerp
+        this.controls.object.position.lerp(cameraPos, delta * 5);
+        this.controls.object.lookAt(vehicle.position.clone().add(new THREE.Vector3(0, 1, 0))); // Look at slightly above car center
+
+        // ENEMY COLLISION LOGIC
+        // Only checking if moving fast enough to do damage
+        if (Math.abs(this.vehicleSpeed) > 5.0 && this.game.enemyManager) {
+            const vehicleBox = new THREE.Box3().setFromObject(vehicle);
+            // Expand box slightly for impact tolerance
+            vehicleBox.expandByScalar(-0.2);
+
+            this.game.enemyManager.enemies.forEach(enemy => {
+                // Skip dead or already dying enemies
+                if (enemy.state === 'dead') return; // 'dead' string from Enemy.STATE.DEAD (checked in Enemy.js)
+                // Actually safer to check if mesh exists and visible
+                if (!enemy.mesh || !enemy.mesh.parent) return;
+
+                // Simple radius check first for performance
+                if (vehicle.position.distanceTo(enemy.mesh.position) < 5.0) {
+                    // Precise Box Check
+                    // We can approximate enemy as a point or small box
+                    const enemyPos = enemy.mesh.position;
+                    if (vehicleBox.containsPoint(enemyPos) || vehicleBox.intersectsBox(new THREE.Box3().setFromObject(enemy.mesh))) {
+
+                        // Hit detected! 
+                        // Calculate Damage
+                        const impactForce = Math.abs(this.vehicleSpeed);
+                        const damage = Math.floor(impactForce * 4); // 25 speed * 4 = 100 dmg (Instant kill)
+
+                        // Apply Damage
+                        enemy.takeDamage(damage);
+                        console.log(`Vehicle hit enemy! Speed: ${impactForce.toFixed(1)}, Damage: ${damage}`);
+
+                        // Optional: Knockback?
+                        // Enemy.js doesn't seem to have knockback vector support, just animation.
+                        // We could manually push the mesh, but Enemy.update might overwrite it.
+                        // Let's just rely on the damage for now.
+
+                        // Slow down car slightly on impact
+                        this.vehicleSpeed *= 0.8;
+                    }
+                }
+            });
+        }
+    }
+
     /**
-     * Check if player is colliding horizontally with obstacles
+     * Check if player is colliding horizontally with obstacles (Walking Only)
      */
     checkHorizontalCollision() {
         const position = this.controls.object.position;

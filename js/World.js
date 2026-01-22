@@ -74,7 +74,7 @@ export class World {
                 // Load assets from JSON
                 if (data.buildings) data.buildings.forEach(b => this.loadModel(b, true));
                 if (data.vehicles) data.vehicles.forEach(v => this.loadModel(v, true));
-                if (data.props) data.props.forEach(p => this.loadModel(p, false));
+                if (data.props) data.props.forEach(p => this.loadModel(p, false, true));
 
                 // Store loaded data reference for editor
                 this.loadedWorldData = data;
@@ -86,7 +86,7 @@ export class World {
             });
     }
 
-    loadModel(config, isCollidable = false) {
+    loadModel(config, isCollidable = false, isMoveable = false) {
         // Use config.collidable if present, otherwise default to argument
         const shouldCollide = config.collidable !== undefined ? config.collidable : isCollidable;
 
@@ -107,8 +107,11 @@ export class World {
                         child.castShadow = true;
                         child.receiveShadow = true;
                         child.userData.modelName = config.model;
+                        child.userData.isMoveable = isMoveable;
                     }
                 });
+
+                model.userData.isMoveable = isMoveable;
 
                 // Add collision for buildings/vehicles (BEFORE transforms to get local AABB)
                 if (shouldCollide) {
