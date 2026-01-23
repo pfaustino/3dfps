@@ -70,7 +70,10 @@ export class Player {
                 damage: 20,
                 fireRate: 0.3,
                 ammo: 12,
-                maxAmmo: 12
+                maxAmmo: 12,
+                recoil: 0.1,
+                cameraRecoil: 0.0,
+                reloadTime: 1.5
             },
             {
                 name: 'Assault Rifle',
@@ -82,7 +85,10 @@ export class Player {
                 damage: 25,
                 fireRate: 0.12,
                 ammo: 30,
-                maxAmmo: 30
+                maxAmmo: 30,
+                recoil: 0.25,
+                cameraRecoil: 0.005,
+                reloadTime: 2.5
             }
         ];
         this.currentWeapon = 0;
@@ -274,6 +280,9 @@ export class Player {
                     this.tryEnterVehicle();
                 }
                 break;
+            case 'KeyR':
+                this.reloadWeapon();
+                break;
             case 'KeyK': // Toggle Editor Mode
                 this.toggleEditorMode();
                 break;
@@ -403,8 +412,60 @@ export class Player {
         }
     }
 
+    reloadWeapon() {
+        if (this.isReloading) return;
+        const weapon = this.getCurrentWeapon();
+        if (this.ammo === this.maxAmmo) return; // Full already
+
+        this.isReloading = true;
+        this.reloadTimer = weapon.reloadTime || 1.5;
+
+        console.log("Reloading...");
+    }
+
+    updateReloadAnimation(delta) {
+        if (!this.isReloading) return;
+
+        this.reloadTimer -= delta;
+        const weapon = this.getCurrentWeapon();
+
+        if (this.reloadTimer <= 0) {
+            this.finishReload();
+            return;
+        }
+
+        // Animation: Tilt weapon up (Pistol) or down (Rifle)
+        if (weapon.model) {
+            // Simple sine wave for "lifting" gun to check mag
+            const totalTime = weapon.reloadTime || 1.5;
+            const progress = 1 - (this.reloadTimer / totalTime); // 0 to 1
+
+            // Peak rotation at 50%
+            const peak = Math.sin(progress * Math.PI);
+
+            // Add to base X rotation (which is -recoil)
+            // Rotate X positive = Down.
+            const dipAmount = 1.0; // radians
+            weapon.model.rotation.x = (peak * dipAmount);
+        }
+    }
+
+    finishReload() {
+        this.isReloading = false;
+        this.ammo = this.maxAmmo;
+        this.updateHUD();
+        console.log("Reload Complete");
+
+        // Reset weapon rotation
+        const weapon = this.getCurrentWeapon();
+        if (weapon && weapon.model) {
+            weapon.model.rotation.x = 0; // Reset
+        }
+    }
+
     shoot() {
         if (this.shootCooldown > 0) return;
+        if (this.isReloading) return; // Block shooting while reloading
 
         if (this.ammo <= 0) {
             // Empty gun click
@@ -420,7 +481,14 @@ export class Player {
         if (this.game.audioManager) this.game.audioManager.playGunshot();
 
         // Trigger weapon recoil
-        this.weaponRecoil = 0.15;
+        const weapon = this.getCurrentWeapon();
+        this.weaponRecoil = weapon.recoil || 0.15;
+
+        // Camera Recoil (Kick Up)
+        const camRecoil = weapon.cameraRecoil || 0;
+        if (camRecoil > 0) {
+            this.controls.object.rotation.x += camRecoil;
+        }
 
         // Raycast from center of screen
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.game.camera);
@@ -502,13 +570,44 @@ export class Player {
     }
 
     createMuzzleFlash() {
-        // Quick screen flash effect via CSS could be added
-        // For now, just a console indicator
-        // Could add a point light briefly at gun position
+        const weapon = this.getCurrentWeapon();
+        if (!weapon || !weapon.model) return;
+
+        // Create flash if it doesn't exist
+        if (!weapon.flash) {
+            const geometry = new THREE.PlaneGeometry(0.3, 0.3);
+            const material = this.flashMaterial || new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            weapon.flash = new THREE.Mesh(geometry, material);
+
+            // Apply muzzle offset
+            if (weapon.muzzleOffset) {
+                weapon.flash.position.set(weapon.muzzleOffset.x, weapon.muzzleOffset.y, weapon.muzzleOffset.z);
+            } else {
+                weapon.flash.position.set(0, 0.1, -1); // Default
+            }
+
+            weapon.model.add(weapon.flash);
+        }
+
+        // Activate Flash
+        weapon.flash.visible = true;
+        weapon.flash.rotation.z = Math.random() * Math.PI; // Randomize rotation
+
+        // Hide after short duration
+        setTimeout(() => {
+            if (weapon.flash) weapon.flash.visible = false;
+        }, 50);
     }
 
     update(delta) {
         if (!this.controls.isLocked) return;
+
+        // Camera Stabilization
+        const cam = this.controls.object;
+        // 1. Clamp Pitch (Prevent Flip) - approx 85 degrees
+        cam.rotation.x = Math.max(-1.5, Math.min(1.5, cam.rotation.x));
+        // 2. Lock Roll (Prevent Tilt)
+        if (Math.abs(cam.rotation.z) > 0.001) cam.rotation.z = 0;
 
         // VEHICLE LOGIC
         if (this.isDriving && this.currentVehicle) {
@@ -523,15 +622,21 @@ export class Player {
         }
 
         // Update weapon recoil animation
+        // Update weapon animation
         const currentWeapon = this.getCurrentWeapon();
         if (currentWeapon && currentWeapon.model) {
-            if (this.weaponRecoil > 0) {
-                this.weaponRecoil -= delta * 2;
-                if (this.weaponRecoil < 0) this.weaponRecoil = 0;
+            if (this.isReloading) {
+                this.updateReloadAnimation(delta);
+            } else {
+                // Recoil Recovery
+                if (this.weaponRecoil > 0) {
+                    this.weaponRecoil -= delta * 2;
+                    if (this.weaponRecoil < 0) this.weaponRecoil = 0;
+                }
+                // Apply recoil to weapon position/rotation
+                currentWeapon.model.position.z = currentWeapon.position.z + this.weaponRecoil;
+                currentWeapon.model.rotation.x = -this.weaponRecoil * 0.5;
             }
-            // Apply recoil to weapon position
-            currentWeapon.model.position.z = currentWeapon.position.z + this.weaponRecoil;
-            currentWeapon.model.rotation.x = -this.weaponRecoil * 0.5;
         }
 
         // Apply gravity
