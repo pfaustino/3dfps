@@ -17,7 +17,6 @@ export class Player {
         this.moveBackward = false;
         this.moveLeft = false;
         this.moveRight = false;
-        this.isFiring = false;
         this.jumpCount = 0;
         this.maxJumps = 2; // Double jump!
 
@@ -74,8 +73,7 @@ export class Player {
                 maxAmmo: 12,
                 recoil: 0.1,
                 cameraRecoil: 0.0,
-                reloadTime: 1.5,
-                automatic: false
+                reloadTime: 1.5
             },
             {
                 name: 'Assault Rifle',
@@ -90,8 +88,7 @@ export class Player {
                 maxAmmo: 30,
                 recoil: 0.25,
                 cameraRecoil: 0.005,
-                reloadTime: 2.5,
-                automatic: true
+                reloadTime: 2.5
             }
         ];
         this.currentWeapon = 0;
@@ -114,7 +111,6 @@ export class Player {
         });
 
         this.controls.addEventListener('unlock', () => {
-            this.isFiring = false;
             // Don't pause if we are in Editor Mode and holding an object
             if (this.editMode && this.selectedObject) {
                 return;
@@ -133,7 +129,6 @@ export class Player {
 
         // Mouse controls
         document.addEventListener('mousedown', (e) => this.onMouseDown(e));
-        document.addEventListener('mouseup', (e) => this.onMouseUp(e));
         document.addEventListener('mousemove', (e) => this.onMouseMove(e));
         document.addEventListener('wheel', (e) => this.onWheel(e));
         document.addEventListener('contextmenu', (e) => e.preventDefault()); // Disable context menu for right click
@@ -406,7 +401,6 @@ export class Player {
 
         if (event.button === 0) { // Left click - Always Shoot
             if (!this.editMode) {
-                this.isFiring = true;
                 this.shoot();
             }
         }
@@ -415,12 +409,6 @@ export class Player {
             if (this.editMode) {
                 this.selectObject(event.ctrlKey);
             }
-        }
-    }
-
-    onMouseUp(event) {
-        if (event.button === 0) {
-            this.isFiring = false;
         }
     }
 
@@ -486,7 +474,6 @@ export class Player {
         if (this.ammo <= 0) {
             // Empty gun click
             if (this.game.audioManager) this.game.audioManager.playEmptyGun();
-            this.shootCooldown = 0.25; // Rate limit the click sound
             return;
         }
 
@@ -494,6 +481,7 @@ export class Player {
         this.ammo--;
         this.updateHUD();
 
+        // Play gunshot sound
         // Play gunshot sound
         if (this.game.audioManager) {
             this.game.audioManager.playWeaponAction(this.getCurrentWeapon().name, 'shot');
@@ -640,11 +628,7 @@ export class Player {
             this.shootCooldown -= delta;
         }
 
-        // Auto-fire
-        if (this.isFiring && this.getCurrentWeapon().automatic) {
-            this.shoot();
-        }
-
+        // Update weapon recoil animation
         // Update weapon animation
         const currentWeapon = this.getCurrentWeapon();
         if (currentWeapon && currentWeapon.model) {
