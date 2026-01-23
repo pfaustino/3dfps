@@ -17,7 +17,7 @@ export class World {
         this.createGround();
         this.createRoads();
         this.loadCityAssets();
-        this.createDecorations();
+
     }
 
     createGround() {
@@ -169,53 +169,13 @@ export class World {
         );
     }
 
-    createDecorations() {
-        // Floating orbs for visual interest
-        const orbPositions = [
-            { x: -20, y: 5, z: -30 },
-            { x: 20, y: 6, z: -40 },
-            { x: 0, y: 8, z: -60 },
-            { x: -40, y: 4, z: -20 },
-            { x: 40, y: 5, z: -25 },
-            { x: 30, y: 4, z: 40 },
-            { x: -30, y: 5, z: 30 },
-        ];
 
-        orbPositions.forEach((pos, index) => {
-            const geometry = new THREE.SphereGeometry(0.4, 16, 16);
-            const material = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
-            const orb = new THREE.Mesh(geometry, material);
-            orb.position.set(pos.x, pos.y, pos.z);
-            orb.name = `orb_${index} `;
-            this.game.scene.add(orb);
-            this.collidables.push(orb);
-
-            const light = new THREE.PointLight(0x00d4ff, 1, 12);
-            light.position.copy(orb.position);
-            this.game.scene.add(light);
-
-            orb.userData.light = light;
-            orb.userData.baseY = pos.y;
-            orb.userData.phase = Math.random() * Math.PI * 2;
-        });
-    }
 
     update(delta) {
         const time = Date.now() * 0.001;
 
         // Animate orbs
-        this.collidables.forEach(obj => {
-            if (obj.name && obj.name.startsWith('orb_')) {
-                const baseY = obj.userData.baseY;
-                const phase = obj.userData.phase;
-                obj.position.y = baseY + Math.sin(time * 2 + phase) * 0.5;
-                obj.rotation.y += delta;
 
-                if (obj.userData.light) {
-                    obj.userData.light.position.copy(obj.position);
-                }
-            }
-        });
     }
 
     getAsset(name) {
