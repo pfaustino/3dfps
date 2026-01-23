@@ -17,6 +17,7 @@ export class Player {
         this.moveBackward = false;
         this.moveLeft = false;
         this.moveRight = false;
+        this.isFiring = false;
         this.jumpCount = 0;
         this.maxJumps = 2; // Double jump!
 
@@ -73,7 +74,9 @@ export class Player {
                 maxAmmo: 12,
                 recoil: 0.1,
                 cameraRecoil: 0.0,
-                reloadTime: 1.5
+                reloadTime: 1.5,
+                automatic: false,
+                muzzleOffset: { x: 0, y: 0.8, z: -2.5 }
             },
             {
                 name: 'Assault Rifle',
@@ -88,7 +91,9 @@ export class Player {
                 maxAmmo: 30,
                 recoil: 0.25,
                 cameraRecoil: 0.005,
-                reloadTime: 2.5
+                reloadTime: 2.5,
+                automatic: true,
+                muzzleOffset: { x: 0, y: 0.6, z: -4.5 }
             }
         ];
         this.currentWeapon = 0;
@@ -111,6 +116,7 @@ export class Player {
         });
 
         this.controls.addEventListener('unlock', () => {
+            this.isFiring = false;
             // Don't pause if we are in Editor Mode and holding an object
             if (this.editMode && this.selectedObject) {
                 return;
@@ -129,6 +135,7 @@ export class Player {
 
         // Mouse controls
         document.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        document.addEventListener('mouseup', (e) => this.onMouseUp(e));
         document.addEventListener('mousemove', (e) => this.onMouseMove(e));
         document.addEventListener('wheel', (e) => this.onWheel(e));
         document.addEventListener('contextmenu', (e) => e.preventDefault()); // Disable context menu for right click
@@ -401,6 +408,7 @@ export class Player {
 
         if (event.button === 0) { // Left click - Always Shoot
             if (!this.editMode) {
+                this.isFiring = true;
                 this.shoot();
             }
         }
@@ -409,6 +417,12 @@ export class Player {
             if (this.editMode) {
                 this.selectObject(event.ctrlKey);
             }
+        }
+    }
+
+    onMouseUp(event) {
+        if (event.button === 0) {
+            this.isFiring = false;
         }
     }
 
@@ -474,6 +488,7 @@ export class Player {
         if (this.ammo <= 0) {
             // Empty gun click
             if (this.game.audioManager) this.game.audioManager.playEmptyGun();
+            this.shootCooldown = 0.25; // Rate limit the click sound
             return;
         }
 
@@ -582,15 +597,30 @@ export class Player {
 
         // Create flash if it doesn't exist
         if (!weapon.flash) {
-            const geometry = new THREE.PlaneGeometry(0.3, 0.3);
-            const material = this.flashMaterial || new THREE.MeshBasicMaterial({ color: 0xffff00 });
-            weapon.flash = new THREE.Mesh(geometry, material);
+            weapon.flash = new THREE.Group();
 
-            // Apply muzzle offset
+            // 1. Visual Plane
+            const geometry = new THREE.PlaneGeometry(0.5, 0.5);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xffffaa,
+                transparent: true,
+                opacity: 0.9,
+                depthTest: false // Ensure it draws on top of gun
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.rotation.z = Math.random() * Math.PI;
+            weapon.flash.add(mesh);
+            weapon.flashMesh = mesh; // Ref for rotation
+
+            // 2. Light Source
+            const light = new THREE.PointLight(0xffaa00, 2, 5); // Warm yellow/orange light, range 5m
+            weapon.flash.add(light);
+
+            // Apply global offset
             if (weapon.muzzleOffset) {
                 weapon.flash.position.set(weapon.muzzleOffset.x, weapon.muzzleOffset.y, weapon.muzzleOffset.z);
             } else {
-                weapon.flash.position.set(0, 0.1, -1); // Default
+                weapon.flash.position.set(0, 0.2, -1.5);
             }
 
             weapon.model.add(weapon.flash);
@@ -598,7 +628,13 @@ export class Player {
 
         // Activate Flash
         weapon.flash.visible = true;
-        weapon.flash.rotation.z = Math.random() * Math.PI; // Randomize rotation
+
+        // Randomize rotation
+        if (weapon.flashMesh) {
+            weapon.flashMesh.rotation.z = Math.random() * Math.PI;
+            const scale = 0.8 + Math.random() * 0.4;
+            weapon.flashMesh.scale.set(scale, scale, 1);
+        }
 
         // Hide after short duration
         setTimeout(() => {
@@ -626,6 +662,11 @@ export class Player {
         // Update shoot cooldown
         if (this.shootCooldown > 0) {
             this.shootCooldown -= delta;
+        }
+
+        // Auto-fire
+        if (this.isFiring && this.getCurrentWeapon().automatic) {
+            this.shoot();
         }
 
         // Update weapon recoil animation

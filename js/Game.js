@@ -83,6 +83,7 @@ export class Game {
             1000
         );
         this.camera.position.set(0, 1.7, 5); // Eye height
+        this.camera.rotation.order = 'YXZ'; // Important for First Person Controls
     }
 
     setupLighting() {
