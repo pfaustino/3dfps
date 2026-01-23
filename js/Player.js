@@ -613,7 +613,7 @@ export class Player {
             weapon.flashMesh = mesh; // Ref for rotation
 
             // 2. Light Source
-            const light = new THREE.PointLight(0xffaa00, 2, 5); // Warm yellow/orange light, range 5m
+            const light = new THREE.PointLight(0xffaa00, 5, 10); // Stronger light, range 10m
             weapon.flash.add(light);
 
             // Apply global offset
