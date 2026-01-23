@@ -10,17 +10,71 @@
 
 <body>
     <div id="blocker">
-        <div id="instructions">
-            <h1>3D FPS Game</h1>
-            <p>Click to play</p>
-            <p class="controls">
-                WASD - Move<br>
-                MOUSE - Look<br>
-                SPACE - Jump<br>
-                LEFT CLICK - Shoot<br>
-                ESC - Pause
-            </p>
+        <div id="menu-container">
+            <!-- Main Menu -->
+            <div id="main-menu" class="menu-screen">
+                <h1 class="game-title">3D FPS GAME</h1>
+                <div class="menu-buttons">
+                    <button id="btn-resume">RESUME</button>
+                    <button id="btn-settings">SETTINGS</button>
+                    <button id="btn-about">ABOUT</button>
+                    <button id="btn-credits">CREDITS</button>
+                </div>
+                <div class="version">v0.9.9.3</div>
+            </div>
+
+            <!-- Settings Screen -->
+            <div id="settings-menu" class="menu-screen hidden">
+                <h2>SETTINGS</h2>
+                <div class="setting-row">
+                    <label>Music Volume</label>
+                    <input type="range" id="slider-music" min="0" max="100" value="30">
+                </div>
+                <div class="setting-row">
+                    <label>Sound Volume</label>
+                    <input type="range" id="slider-sfx" min="0" max="100" value="70">
+                </div>
+                <div class="setting-row">
+                    <label>Difficulty: <span id="difficulty-label" style="color:#ff4444">Normal</span></label>
+                    <input type="range" id="slider-difficulty" min="1" max="6" value="3" step="1">
+                    <div class="difficulty-ticks">
+                        <span>Very Easy</span>
+                        <span>Easy</span>
+                        <span>Normal</span>
+                        <span>Hard</span>
+                        <span>Very Hard</span>
+                        <span>Nightmare</span>
+                    </div>
+                </div>
+                <button class="btn-back" data-target="main">BACK</button>
+            </div>
+
+            <!-- About Screen -->
+            <div id="about-menu" class="menu-screen hidden">
+                <h2>ABOUT</h2>
+                <div class="menu-content">
+                    <p>Survive the waves of robotic and supernatural enemies.</p>
+                    <p>Collect loot to upgrade your armor and health.</p>
+                    <p>Use WASD to Move, SPACE to Jump, and CLICK to Shoot.</p>
+                </div>
+                <button class="btn-back" data-target="main">BACK</button>
+            </div>
+
+            <!-- Credits Screen -->
+            <div id="credits-menu" class="menu-screen hidden">
+                <h2>CREDITS</h2>
+                <div class="menu-content">
+                    <p>Development: Antigravity AI & User</p>
+                    <p>Engine: Three.js</p>
+                    <p>Audio: Procedural & Licensed Assets</p>
+                </div>
+                <button class="btn-back" data-target="main">BACK</button>
+            </div>
         </div>
+    </div>
+
+    <div id="notification"
+        style="position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); color: #ff0; font-family: sans-serif; font-size: 48px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity 1s;">
     </div>
 
     <div id="crosshair">+</div>
@@ -29,7 +83,8 @@
         <div id="armor-display" style="color: #aaaaff;">Armor: 0</div>
         <div id="money-display" style="color: #ffd700;">$: 0</div>
         <div id="ammo">Ammo: 30</div>
-        <div id="kills">Kills: 0</div>
+        <div id="wave">Wave 1: 0/0</div>
+        <div id="kills">Total Kills: 0</div>
         <div id="position" style="color: #0f0;">Pos: 0, 0, 0</div>
         <div id="target" style="color: #ff0;">Looking at: -</div>
     </div>
@@ -53,7 +108,7 @@
     <!-- Version Number -->
     <div
         style="position: absolute; bottom: 5px; right: 5px; color: #555; font-family: monospace; font-size: 10px; pointer-events: none;">
-        v0.9.9.2</div>
+        v0.9.9.3</div>
 
     <script type="importmap">
     {

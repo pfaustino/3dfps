@@ -124,10 +124,10 @@ export class Player {
             this.game.pause();
         });
 
-        // Click to start
-        this.game.blocker.addEventListener('click', () => {
-            this.controls.lock();
-        });
+        // Blocker click listener removed to support UI Menu
+        // this.game.blocker.addEventListener('click', () => {
+        //     this.controls.lock();
+        // });
 
         // Keyboard controls
         document.addEventListener('keydown', (e) => this.onKeyDown(e));

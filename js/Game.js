@@ -54,10 +54,81 @@ export class Game {
         // Handle window resize
         window.addEventListener('resize', () => this.onWindowResize());
 
+        // Setup UI
+        this.setupUI();
+
         // Start game loop
         this.animate();
 
         console.log('Game initialized');
+    }
+
+    setupUI() {
+        // Menu Navigation
+        const screens = {
+            main: document.getElementById('main-menu'),
+            settings: document.getElementById('settings-menu'),
+            about: document.getElementById('about-menu'),
+            credits: document.getElementById('credits-menu')
+        };
+
+        const showScreen = (screenName) => {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[screenName].classList.remove('hidden');
+        };
+
+        // Main Menu Buttons
+        document.getElementById('btn-resume').addEventListener('click', () => {
+            this.player.controls.lock();
+        });
+
+        document.getElementById('btn-settings').addEventListener('click', () => showScreen('settings'));
+        document.getElementById('btn-about').addEventListener('click', () => showScreen('about'));
+        document.getElementById('btn-credits').addEventListener('click', () => showScreen('credits'));
+
+        // Back Buttons
+        document.querySelectorAll('.btn-back').forEach(btn => {
+            btn.addEventListener('click', () => {
+                showScreen(btn.dataset.target || 'main');
+            });
+        });
+
+        // Settings Sliders
+        const musicSlider = document.getElementById('slider-music');
+        const sfxSlider = document.getElementById('slider-sfx');
+        const diffSlider = document.getElementById('slider-difficulty');
+        const diffLabel = document.getElementById('difficulty-label');
+
+        // Audio Settings
+        musicSlider.addEventListener('input', (e) => {
+            if (this.audioManager) {
+                this.audioManager.musicVolume = e.target.value / 100;
+                this.audioManager.startAmbient(); // Refresh
+                // Or update gain directly if implemented
+                // For now, next ambient loop update will catch it, or we can add a method
+            }
+        });
+
+        sfxSlider.addEventListener('input', (e) => {
+            if (this.audioManager) {
+                this.audioManager.sfxVolume = e.target.value / 100;
+                this.audioManager.playTone(440, 0.1, 0.5); // Test tone
+            }
+        });
+
+        // Difficulty Settings
+        const diffNames = ['Very Easy', 'Easy', 'Normal', 'Hard', 'Very Hard', 'Nightmare'];
+        const diffColors = ['#4ade80', '#88ff88', '#fff', '#ffaa00', '#ff4444', '#aa0000'];
+
+        diffSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) - 1;
+            diffLabel.textContent = diffNames[val];
+            diffLabel.style.color = diffColors[val];
+
+            if (this.enemyManager) {
+                this.enemyManager.setDifficulty(val + 1);
+            }
+        });
     }
 
     setupRenderer() {
