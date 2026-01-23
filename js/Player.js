@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { PointerLockControls } from './PointerLockControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /**
@@ -421,6 +421,10 @@ export class Player {
         this.reloadTimer = weapon.reloadTime || 1.5;
 
         console.log("Reloading...");
+
+        if (this.game.audioManager) {
+            this.game.audioManager.playWeaponAction(weapon.name, 'reload');
+        }
     }
 
     updateReloadAnimation(delta) {
@@ -478,7 +482,10 @@ export class Player {
         this.updateHUD();
 
         // Play gunshot sound
-        if (this.game.audioManager) this.game.audioManager.playGunshot();
+        // Play gunshot sound
+        if (this.game.audioManager) {
+            this.game.audioManager.playWeaponAction(this.getCurrentWeapon().name, 'shot');
+        }
 
         // Trigger weapon recoil
         const weapon = this.getCurrentWeapon();

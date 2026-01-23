@@ -49,6 +49,12 @@ export class AudioManager {
         this.loadSound('ghost', 'assets/sounds/halloween-ghost-whisper-410557.mp3');
         this.loadSound('zombie', 'assets/sounds/zombie-sound-357975.mp3');
         this.loadSound('demon', 'assets/sounds/horror-demonic-sound-1-vol-001-140997.mp3');
+
+        // Weapon Sounds
+        this.loadSound('pistol-shot', 'assets/sounds/pistol-shot.mp3');
+        this.loadSound('pistol-reload', 'assets/sounds/pistol-reload.mp3');
+        this.loadSound('ak47-shot', 'assets/sounds/ak47-shot.mp3');
+        this.loadSound('ak47-reload', 'assets/sounds/ak47-reload.mp3');
     }
 
     loadSound(key, url) {
@@ -69,7 +75,48 @@ export class AudioManager {
     /**
      * Gunshot sound - short burst of filtered noise
      */
+    /**
+     * Play weapon-specific sound
+     */
+    playWeaponAction(weaponName, action) {
+        if (!this.initialized) return;
+
+        let key = '';
+        const name = weaponName.toLowerCase();
+
+        // Map weapon names to sound keys
+        if (name.includes('pistol')) {
+            key = `pistol-${action}`;
+        } else if (name.includes('rifle') || name.includes('ak47')) {
+            key = `ak47-${action}`;
+        }
+
+        // Try to play loaded buffer
+        if (key && this.buffers[key]) {
+            const source = this.context.createBufferSource();
+            source.buffer = this.buffers[key];
+
+            const gain = this.context.createGain();
+            // Adjust volume based on action
+            gain.gain.value = (action === 'shot' ? 0.8 : 0.5) * this.sfxVolume;
+
+            source.connect(gain);
+            gain.connect(this.masterGain);
+            source.start();
+            return;
+        }
+
+        // Fallback to procedural if file missing
+        if (action === 'shot') this.playProceduralGunshot();
+        else if (action === 'reload') this.playProceduralReload();
+    }
+
     playGunshot() {
+        // Legacy fallback
+        this.playProceduralGunshot();
+    }
+
+    playProceduralGunshot() {
         if (!this.initialized) return;
 
         const now = this.context.currentTime;
@@ -333,14 +380,15 @@ export class AudioManager {
      * Reload sound
      */
     playReload() {
-        if (!this.initialized) return;
+        this.playProceduralReload();
+    }
 
-        const now = this.context.currentTime;
-
-        // Mechanical click sequence
-        this.playTone(800, 0.03, 0.2, 'square');
-        setTimeout(() => this.playTone(600, 0.03, 0.2, 'square'), 100);
-        setTimeout(() => this.playTone(1000, 0.05, 0.3, 'square'), 200);
+    playProceduralReload() {
+        // Silenced to prevent Echo with MP3s
+        // if (!this.initialized) return;
+        // this.playTone(800, 0.03, 0.2, 'square');
+        // setTimeout(() => this.playTone(600, 0.03, 0.2, 'square'), 100);
+        // setTimeout(() => this.playTone(1000, 0.05, 0.3, 'square'), 200);
     }
 
     /**
